@@ -76,6 +76,9 @@ ol.hist:empty::after{content:"まだありません";color:var(--muted);margin-l
 .btn.sub{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
 .linkbox{font-size:.8rem;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;overflow-wrap:anywhere;user-select:all}
 .row{display:flex;gap:8px;flex-wrap:wrap}
+.roomno{display:flex;align-items:baseline;justify-content:center;gap:12px;background:var(--bg);border-radius:12px;padding:10px}
+.roomno small{font-size:.75rem;font-weight:900;color:var(--muted)}
+.roomno b{font-family:var(--display);font-weight:400;font-size:2rem;letter-spacing:.18em;font-variant-numeric:tabular-nums}
 .note{font-size:.75rem;color:var(--muted);margin:0;line-height:1.6}
 
 .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--bg);border-radius:999px;padding:3px}
@@ -127,10 +130,12 @@ ol.hist:empty::after{content:"まだありません";color:var(--muted);margin-l
   <details id="roomBox">
     <summary>ふたりで同じ画面を見る</summary>
     <div class="inner" id="noRoom">
-      <p class="note">部屋をつくってリンクを送ると、どちらが回しても止めても、両方の画面で同じ結果になります。固定や消した言葉も共有されます。</p>
+      <p class="note">片方が部屋をつくって6桁の番号を伝え、もう片方がその番号で入ります。どちらが回しても止めても、両方の画面で同じ結果になります。固定や消した言葉も共有されます。</p>
       <button class="btn" id="makeRoom">部屋をつくる</button>
+      <div class="field"><input id="joinCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="部屋番号（6桁）" autocomplete="off"><button class="btn" id="joinBtn">入る</button></div>
     </div>
     <div class="inner" id="inRoom" hidden>
+      <div class="roomno"><small>部屋番号</small><b id="roomNo"></b></div>
       <div class="linkbox" id="roomLink"></div>
       <div class="row">
         <button class="btn" id="copyLink">リンクをコピー</button>
@@ -382,14 +387,26 @@ function connect(){
 function roomUrl(){ const u=new URL(location.href); u.search=room?"?room="+room:""; u.hash=""; return u.toString() }
 function renderRoom(){
   $("noRoom").hidden=!!room; $("inRoom").hidden=!room;
-  if(room){ $("roomLink").textContent=roomUrl(); $("roomBox").open=true } else pill.hidden=true;
+  if(room){ $("roomLink").textContent=roomUrl(); $("roomNo").textContent=room; $("roomBox").open=true } else pill.hidden=true;
+}
+function enterRoom(r,carry){
+  room=r; history.replaceState(null,"",roomUrl());
+  if(carry){ S=carry; S.ts=Date.now(); saveLocal() }
+  else { S={custom:[[],[],[]],removed:[[],[],[]],locks:[false,false,false],ts:0}; loadLocal() }
+  renderRoom(); renderAll(); tries=0; bi=0; connect();
 }
 $("makeRoom").addEventListener("click",()=>{
-  const a="abcdefghjkmnpqrstuvwxyz23456789"; let r=""; const buf=new Uint32Array(10); crypto.getRandomValues(buf); buf.forEach(n=>r+=a[n%a.length]);
-  const carry=JSON.parse(JSON.stringify(S));
-  room=r; history.replaceState(null,"",roomUrl()); S=carry; S.ts=Date.now(); saveLocal();
-  renderRoom(); renderAll(); tries=0; bi=0; connect();
+  const buf=new Uint32Array(1); crypto.getRandomValues(buf);
+  const r=String(100000+buf[0]%900000);
+  enterRoom(r,JSON.parse(JSON.stringify(S)));
 });
+function join(){
+  const v=$("joinCode").value.replace(/\D/g,"");
+  if(v.length!==6){ toast("6桁の数字を入れてください"); return }
+  $("joinCode").value=""; enterRoom(v,null);
+}
+$("joinBtn").addEventListener("click",join);
+$("joinCode").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.isComposing) join() });
 $("leaveRoom").addEventListener("click",()=>{
   if(client){ try{client.end(true)}catch(e){} } client=null; online=false; clearInterval(presT);
   room=""; history.replaceState(null,"",roomUrl()); loadLocal(); renderRoom(); renderAll();
