@@ -76,6 +76,22 @@ ol.hist:empty::after{content:"まだありません";color:var(--muted);margin-l
 .btn.sub{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
 .linkbox{font-size:.8rem;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;overflow-wrap:anywhere;user-select:all}
 .row{display:flex;gap:8px;flex-wrap:wrap}
+.sumbadge{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:900;border-radius:999px;padding:2px 9px;margin-left:6px;border:1.5px solid var(--line);color:var(--muted);vertical-align:1px}
+.sumbadge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.sumbadge.ok{color:var(--ink);border-color:var(--leaf)} .sumbadge.ok::before{background:var(--leaf)}
+.sumbadge.wait::before{background:var(--sun)} .sumbadge.err::before{background:var(--tomato)}
+.peerline{text-align:center;font-weight:900;font-size:.95rem;font-variant-numeric:tabular-nums;border-radius:10px;padding:8px;background:var(--bg);color:var(--muted)}
+/* 接続状態の色：つながるとバッジ・パネル全体が緑に、1人のときは黄色 */
+.pill.ok,.sumbadge.ok,.peerline.ok{background:var(--leaf);color:var(--on-color);border-color:var(--ink)}
+.pill.ok::before,.sumbadge.ok::before{background:var(--on-color)}
+.pill.alone,.sumbadge.alone,.peerline.alone{background:var(--sun);color:var(--on-color);border-color:var(--ink)}
+.pill.alone::before,.sumbadge.alone::before{background:var(--on-color)}
+.pill.err,.sumbadge.err,.peerline.err{background:var(--tomato);color:var(--on-color);border-color:var(--ink)}
+.pill.err::before,.sumbadge.err::before{background:var(--on-color)}
+#roomBox{transition:background .3s,border-color .3s}
+#roomBox[data-state="ok"]{border:2px solid var(--leaf);background:color-mix(in srgb,var(--leaf) 16%,var(--surface))}
+#roomBox[data-state="alone"]{border:2px solid var(--sun)}
+#roomBox[data-state="err"]{border:2px solid var(--tomato)}
 .roomno{display:flex;align-items:baseline;justify-content:center;gap:12px;background:var(--bg);border-radius:12px;padding:10px}
 .roomno small{font-size:.75rem;font-weight:900;color:var(--muted)}
 .roomno b{font-family:var(--display);font-weight:400;font-size:2rem;letter-spacing:.18em;font-variant-numeric:tabular-nums}
@@ -128,7 +144,7 @@ ol.hist:empty::after{content:"まだありません";color:var(--muted);margin-l
   <p class="hint">スタート後、ボタンかリールのタップで左から1つずつ止まります。「消す」で今出ている言葉をもう出ないようにできます</p>
 
   <details id="roomBox">
-    <summary>ふたりで同じ画面を見る</summary>
+    <summary>ふたりで同じ画面を見る <span class="sumbadge" id="sumBadge" hidden></span></summary>
     <div class="inner" id="noRoom">
       <p class="note">片方が部屋をつくって6桁の番号を伝え、もう片方がその番号で入ります。どちらが回しても止めても、両方の画面で同じ結果になります。固定や消した言葉も共有されます。</p>
       <button class="btn" id="makeRoom">部屋をつくる</button>
@@ -136,6 +152,7 @@ ol.hist:empty::after{content:"まだありません";color:var(--muted);margin-l
     </div>
     <div class="inner" id="inRoom" hidden>
       <div class="roomno"><small>部屋番号</small><b id="roomNo"></b></div>
+      <div class="peerline" id="peerLine"></div>
       <div class="linkbox" id="roomLink"></div>
       <div class="row">
         <button class="btn" id="copyLink">リンクをコピー</button>
@@ -350,9 +367,19 @@ $("newWord").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.isComposing)
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 let client=null, online=false, T="", gotState=false, peers={}, presT=null, bi=0, tries=0;
 const pill=$("pill");
-function setStatus(kind,text){ pill.hidden=false; pill.className="pill "+kind; pill.textContent=text }
+function setStatus(kind,text){
+  pill.hidden=false; pill.className="pill "+kind; pill.textContent=text;
+  const b=$("sumBadge"); b.hidden=false; b.className="sumbadge "+kind; b.textContent=text;
+  $("peerLine").textContent=text; $("peerLine").className="peerline "+kind;
+  $("roomBox").dataset.state=kind;
+}
 function peerCount(){ const now=Date.now(); return Object.values(peers).filter(t=>now-t<40000).length }
-function refreshPill(){ if(online){ const n=peerCount(); setStatus("ok", n>=2?`${n}人で接続中`:"相手を待っています") } }
+function refreshPill(){
+  if(!online) return;
+  const n=peerCount();
+  if(n>=2) setStatus("ok",`${n}人で接続中`);
+  else setStatus("alone","1人 ・ 相手を待っています");
+}
 function publishState(){ if(online) client.publish(T+"/state",JSON.stringify(S),{qos:1,retain:true}) }
 function presence(){ if(online){ client.publish(T+"/p",JSON.stringify({id:myId}),{qos:0}); refreshPill() } }
 
@@ -387,7 +414,7 @@ function connect(){
 function roomUrl(){ const u=new URL(location.href); u.search=room?"?room="+room:""; u.hash=""; return u.toString() }
 function renderRoom(){
   $("noRoom").hidden=!!room; $("inRoom").hidden=!room;
-  if(room){ $("roomLink").textContent=roomUrl(); $("roomNo").textContent=room; $("roomBox").open=true } else pill.hidden=true;
+  if(room){ $("roomLink").textContent=roomUrl(); $("roomNo").textContent=room; $("roomBox").open=true } else { pill.hidden=true; $("sumBadge").hidden=true; delete $("roomBox").dataset.state }
 }
 function enterRoom(r,carry){
   room=r; history.replaceState(null,"",roomUrl());
