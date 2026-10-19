@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>しょうもない話題ルーレット</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700;900&display=swap">
+<style>
+/* layout: one-column phone stage; result banner, three reels, one big stop button, then room + word manager */
+:root{
+  --bg:#EDF0F7; --surface:#FFFFFF; --ink:#1A2238; --muted:#69708A; --line:#D6DBE8;
+  --tomato:#FF5A36; --leaf:#2BB673; --sun:#FFC93C; --sky:#4C8DF6;
+  --on-color:#1A2238;
+  --display:"Dela Gothic One","Hiragino Sans","Noto Sans JP",sans-serif;
+  --body:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11162A; --surface:#1B2240; --ink:#EEF1F8; --muted:#9AA2BF; --line:#2C3558;
+  --tomato:#FF6E4D; --leaf:#3BCB85; --sun:#FFD25A; --sky:#6FA3FF; --on-color:#11162A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11162A; --surface:#1B2240; --ink:#EEF1F8; --muted:#9AA2BF; --line:#2C3558;
+  --tomato:#FF6E4D; --leaf:#3BCB85; --sun:#FFD25A; --sky:#6FA3FF; --on-color:#11162A; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-weight:500;font-size:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 40px}
+.wrap{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+header h1{font-family:var(--display);font-weight:400;font-size:1.55rem;line-height:1.2;margin:0;text-wrap:balance}
+header h1 span{color:var(--tomato)}
+#count{margin:4px 0 0;color:var(--muted);font-size:.8rem;font-variant-numeric:tabular-nums}
+.pill{flex:none;font-size:.72rem;font-weight:900;border-radius:999px;padding:5px 10px;border:1.5px solid var(--line);color:var(--muted);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.ok{color:var(--ink);border-color:var(--leaf)} .pill.ok::before{background:var(--leaf)}
+.pill.wait::before{background:var(--sun)} .pill.err::before{background:var(--tomato)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
+
+.result{background:var(--surface);border:2px solid var(--ink);border-radius:18px;padding:18px 16px 16px;min-height:118px;display:flex;flex-direction:column;justify-content:center;gap:6px;box-shadow:5px 5px 0 var(--ink)}
+.result small{font-size:.72rem;letter-spacing:.12em;color:var(--muted);font-weight:700}
+.result .q{font-family:var(--display);font-size:clamp(1.3rem,6.4vw,1.85rem);line-height:1.35;text-wrap:balance;word-break:auto-phrase}
+.result .q mark{background:linear-gradient(transparent 58%,var(--sun) 58%);color:inherit;padding:0 2px}
+.result.waiting .q{color:var(--muted)}
+.pop{animation:pop .35s ease-out}
+@keyframes pop{0%{transform:scale(.96)}60%{transform:scale(1.02)}100%{transform:scale(1)}}
+
+.reels{display:grid;grid-template-columns:1.15fr 1fr 1.1fr;gap:8px}
+.col{display:flex;flex-direction:column;gap:6px;min-width:0}
+.reel{position:relative;border-radius:14px;height:118px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:22px 6px 10px;color:var(--on-color);border:2px solid var(--ink);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;overflow:hidden}
+.col:nth-child(1) .reel{background:var(--sky)} .col:nth-child(2) .reel{background:var(--sun)} .col:nth-child(3) .reel{background:var(--leaf)}
+.reel .lab{position:absolute;top:6px;left:0;right:0;text-align:center;font-size:.66rem;font-weight:900;letter-spacing:.08em;opacity:.75}
+.reel .val{font-weight:900;font-size:1rem;line-height:1.3;text-align:center;word-break:auto-phrase;overflow-wrap:anywhere}
+.reel.spinning .val{filter:blur(1px);opacity:.8;transform:translateY(-2px)}
+.reel.next{box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--tomato)}
+.reel.landed{animation:pop .3s ease-out}
+.reel.locked{outline:3px dashed var(--ink);outline-offset:-7px}
+.minis{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.mini{font:inherit;font-size:.7rem;font-weight:900;border:1.5px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;padding:5px 0;cursor:pointer}
+.mini[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.mini:disabled{opacity:.4;cursor:default}
+
+.big{font-family:var(--display);font-weight:400;font-size:1.3rem;border:2px solid var(--ink);background:var(--tomato);color:var(--on-color);border-radius:16px;padding:16px;cursor:pointer;box-shadow:4px 4px 0 var(--ink);transition:transform .08s,box-shadow .08s;touch-action:manipulation}
+.big.stop{background:var(--sun)}
+.big:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
+.hint{color:var(--muted);font-size:.8rem;margin:0;text-align:center}
+
+details{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px}
+summary{font-weight:900;cursor:pointer;font-size:.9rem}
+.inner{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+ol.hist{margin:8px 0 2px;padding-left:1.4em;display:flex;flex-direction:column;gap:4px;font-size:.92rem}
+ol.hist:empty::after{content:"まだありません";color:var(--muted);margin-left:-1.4em}
+.btn{font:inherit;font-weight:900;font-size:.85rem;border:0;border-radius:10px;padding:10px 14px;background:var(--ink);color:var(--bg);cursor:pointer}
+.btn.sub{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.linkbox{font-size:.8rem;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;overflow-wrap:anywhere;user-select:all}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.note{font-size:.75rem;color:var(--muted);margin:0;line-height:1.6}
+
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--bg);border-radius:999px;padding:3px}
+.seg button{font:inherit;font-weight:900;font-size:.8rem;border:0;background:transparent;color:var(--muted);border-radius:999px;padding:7px 2px;cursor:pointer}
+.seg button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+.field{display:flex;gap:6px}
+.field input{flex:1;min-width:0;font:inherit;font-size:16px;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.words{display:flex;flex-wrap:wrap;gap:6px;max-height:260px;overflow-y:auto;padding:2px}
+.chip{font-size:.82rem;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:3px 2px 3px 10px;display:inline-flex;align-items:center;gap:2px;color:var(--ink)}
+.chip.mine{border-color:var(--sky)}
+.chip button{border:0;background:transparent;color:var(--muted);font-size:.95rem;cursor:pointer;padding:0 7px;line-height:1.4}
+.chip.gone{opacity:.65;text-decoration:line-through;padding-right:10px;cursor:pointer;font:inherit;font-size:.82rem}
+.sub-h{font-size:.75rem;font-weight:900;color:var(--muted);letter-spacing:.06em;margin:4px 0 0;display:flex;justify-content:space-between;align-items:center}
+.sub-h button{font:inherit;font-size:.75rem;font-weight:900;color:var(--tomato);background:none;border:0;cursor:pointer}
+.empty{font-size:.8rem;color:var(--muted)}
+
+.toast{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:448px;margin:0 auto;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 12px 10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.85rem;font-weight:700;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toast button{font:inherit;font-weight:900;background:var(--sun);color:var(--on-color);border:0;border-radius:8px;padding:6px 10px;cursor:pointer;flex:none}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>しょうもない<span>話題</span>ルーレット</h1>
+      <p id="count"></p>
+    </div>
+    <span class="pill" id="pill" hidden></span>
+  </header>
+
+  <section class="result" id="resBox" aria-live="polite">
+    <small>今日のお題</small>
+    <div class="q" id="out">好きな<mark>爬虫類</mark>は？</div>
+  </section>
+
+  <div class="reels">
+    <div class="col"><div class="reel" data-r="0"><span class="lab">どんな</span><span class="val">好きな</span></div>
+      <div class="minis"><button class="mini lock" data-r="0" aria-pressed="false">固定</button><button class="mini del" data-r="0">消す</button></div></div>
+    <div class="col"><div class="reel" data-r="1"><span class="lab">なにの</span><span class="val">爬虫類</span></div>
+      <div class="minis"><button class="mini lock" data-r="1" aria-pressed="false">固定</button><button class="mini del" data-r="1">消す</button></div></div>
+    <div class="col"><div class="reel" data-r="2"><span class="lab">どうする</span><span class="val">は？</span></div>
+      <div class="minis"><button class="mini lock" data-r="2" aria-pressed="false">固定</button><button class="mini del" data-r="2">消す</button></div></div>
+  </div>
+
+  <button class="big" id="btn">スタート</button>
+  <p class="hint">スタート後、ボタンかリールのタップで左から1つずつ止まります。「消す」で今出ている言葉をもう出ないようにできます</p>
+
+  <details id="roomBox">
+    <summary>ふたりで同じ画面を見る</summary>
+    <div class="inner" id="noRoom">
+      <p class="note">部屋をつくってリンクを送ると、どちらが回しても止めても、両方の画面で同じ結果になります。固定や消した言葉も共有されます。</p>
+      <button class="btn" id="makeRoom">部屋をつくる</button>
+    </div>
+    <div class="inner" id="inRoom" hidden>
+      <div class="linkbox" id="roomLink"></div>
+      <div class="row">
+        <button class="btn" id="copyLink">リンクをコピー</button>
+        <button class="btn sub" id="leaveRoom">部屋から出る</button>
+      </div>
+      <p class="note">同期には公開の中継サーバーを使っています。部屋のリンクを知っている人なら誰でも見られるので、リンクは彼女にだけ送ってください。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>言葉の管理（追加・削除）</summary>
+    <div class="inner">
+      <div class="seg" role="tablist">
+        <button role="tab" data-m="0" aria-selected="false">どんな</button>
+        <button role="tab" data-m="1" aria-selected="true">なにの</button>
+        <button role="tab" data-m="2" aria-selected="false">どうする</button>
+      </div>
+      <div class="field"><input id="newWord" placeholder="追加する言葉（例：カピバラの仲間）" maxlength="20"><button class="btn" id="addBtn">追加</button></div>
+      <div class="field"><input id="filter" placeholder="しぼりこみ"></div>
+      <p class="sub-h"><span id="liveHead">使う言葉</span></p>
+      <div class="words" id="liveWords"></div>
+      <p class="sub-h"><span id="goneHead">消した言葉（タップで戻す）</span><button id="restoreAll">全部戻す</button></p>
+      <div class="words" id="goneWords"></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>さっき出たお題</summary>
+    <ol class="hist" id="hist"></ol>
+  </details>
+</div>
+<div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastUndo">元に戻す</button></div>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.5/dist/mqtt.min.js"></script>
+<script>
+/* ===== 言葉リスト ===== */
+const A=["好きな","苦手な","一番ナメてる","人生で一番お世話になった","実はちょっと気になってる","飼うなら","生まれ変わるなら","無人島に持っていく","子どもの頃こわかった","戦ったら勝てそうな","結婚式に呼びたい","名前がかっこいい","1日だけなるなら","部屋に置きたい","推したい","過小評価されてる","デートで行くなら","親友にしたい","上司にしたい","ルームシェアするなら","宇宙に持っていく","最後の晩餐にしたい","付き合うなら","絶対に勝てない","語感が好きな","見た目で損してる","実家にありそうな","深夜に思い出す","ラスボスっぽい","一番弱そうな","2人で育てるなら","小学生が考えたみたいな","旅行先で買うなら","100個あったら困る","手のひらサイズにしたい","ペアルックにするなら"];
+const B=["爬虫類","両生類","恐竜","深海生物","虫","鳥","魚","犬種","猫の品種","哺乳類","海の生き物","昆虫の幼虫","サメ","カエル","ペンギンの種類","絶滅した動物","動物園の動物","水族館の生き物","鳴き声","キノコ","植物","花","木","サボテン","微生物",
+"おにぎりの具","寿司ネタ","野菜","調味料","パン","鍋の具","駅弁","和菓子","果物","コンビニスイーツ","アイス","お菓子","ラーメンのトッピング","カップ麺","揚げ物","丼もの","駄菓子","チーズ","ドリンク","ご当地グルメ","給食のメニュー","お弁当のおかず","ピザの具","おでんの具","スパイス","ジャム","豆","郷土料理","ファミレスのメニュー","缶詰",
+"文房具","家電","楽器","フォント","色","家具","キッチン用品","掃除道具","100均グッズ","靴","帽子","カバン","アクセサリー","おもちゃ","ボードゲーム","トランプのゲーム","スポーツ","球技","伝説の武器","工具","傘","マグカップ","枕","入浴剤","香り","素材","布","紙","石","宝石",
+"都道府県","国","首都","駅","建物","公園の遊具","商店街のお店","観光地","温泉","山","島","橋","コンビニ","スーパーの売り場","ホームセンターの売り場","遊園地のアトラクション","教室","部屋","世界遺産","道の駅",
+"ことわざ","四字熟語","オノマトペ","方言","漢字","苗字","ひらがな","曜日","月","季節","天気","雲の形","星座","惑星","元素","単位","数字","図形","記号","絵文字",
+"妖怪","モンスター","魔法","超能力","神話の神様","架空のゆるキャラ","都市伝説","呪文","伝説の生き物","必殺技",
+"乗り物","職業","習い事","部活","学校行事","祝日","家事","朝のルーティン","寝る前の習慣","口癖","髪型","服の柄","体のパーツ","くしゃみの音","年中行事","スマホアプリ","ゲームのジャンル","映画のジャンル","音楽のジャンル","ダンス"];
+const C=["は？","ベスト3は？","とその理由は？","を擬人化すると？","を一言で言うと？","をせーので言う！","の第一印象は？","ワースト1は？","を相手に当ててもらう","のモノマネして","をCMっぽく紹介して","で大喜利","を3つ挙げて","の思い出は？","になりきって話す","をジェスチャーなしで説明して","に点数をつけて"];
+const BASE=[A,B,C], NAMES=["どんな","なにの","どうする"];
+
+/* ===== 状態 ===== */
+const qs=new URLSearchParams(location.search);
+let room=(qs.get("room")||"").toLowerCase(); if(!/^[a-z0-9]{6,16}$/.test(room)) room="";
+const myId=Math.random().toString(36).slice(2,10);
+let S={custom:[[],[],[]],removed:[[],[],[]],locks:[false,false,false],ts:0};
+const key=()=>"shoumonai-v3:"+(room||"solo");
+function loadLocal(){ try{ const s=JSON.parse(localStorage.getItem(key())||"null"); if(valid(s)) S=s }catch(e){} }
+function saveLocal(){ try{ localStorage.setItem(key(),JSON.stringify(S)) }catch(e){} }
+const strArr=(a,max)=>Array.isArray(a)&&a.length<=max&&a.every(x=>typeof x==="string"&&x.length<=24);
+function valid(s){ return s&&Array.isArray(s.custom)&&s.custom.length===3&&s.custom.every(a=>strArr(a,300))
+  &&Array.isArray(s.removed)&&s.removed.length===3&&s.removed.every(a=>strArr(a,400))
+  &&Array.isArray(s.locks)&&s.locks.length===3&&typeof s.ts==="number" }
+loadLocal();
+
+const L=i=>BASE[i].filter(w=>!S.removed[i].includes(w)).concat(S.custom[i]);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+const $=id=>document.getElementById(id);
+const reels=[...document.querySelectorAll(".reel")], valsEl=reels.map(r=>r.querySelector(".val"));
+const lockBtns=[...document.querySelectorAll(".lock")], delBtns=[...document.querySelectorAll(".del")];
+const btn=$("btn"), out=$("out"), box=$("resBox"), hist=$("hist");
+const vals=["好きな","爬虫類","は？"];
+let mode="idle", queue=[], timers=[null,null,null], coasting=0, pendingStop=false, pendingTimer=null;
+
+/* ===== 表示 ===== */
+function updateCount(){
+  const n=[0,1,2].map(i=>L(i).length);
+  $("count").textContent=`どんな ${n[0]} × なにの ${n[1]} × どうする ${n[2]} ＝ ${(n[0]*n[1]*n[2]).toLocaleString()} 通り`;
+}
+function show(){
+  out.innerHTML=`${esc(vals[0])}<mark>${esc(vals[1])}</mark>${esc(vals[2])}`;
+  box.classList.remove("waiting","pop"); void box.offsetWidth; box.classList.add("pop");
+  const li=document.createElement("li"); li.textContent=vals.join(""); hist.prepend(li);
+  while(hist.children.length>20) hist.lastChild.remove();
+}
+function renderLocks(){
+  lockBtns.forEach((b,i)=>{ b.setAttribute("aria-pressed",S.locks[i]); b.textContent=S.locks[i]?"固定中":"固定"; reels[i].classList.toggle("locked",S.locks[i]) });
+}
+function renderControls(){
+  const idle=mode==="idle";
+  lockBtns.forEach(b=>b.disabled=!idle); delBtns.forEach(b=>b.disabled=!idle);
+  if(idle){ btn.textContent="スタート"; btn.classList.remove("stop") }
+  else if(queue.length){ btn.textContent=["左","まんなか","右"][queue[0]]+"をとめる"; btn.classList.add("stop") }
+  reels.forEach((r,i)=>r.classList.toggle("next",mode==="spinning"&&queue[0]===i));
+}
+function renderAll(){ renderLocks(); updateCount(); renderWords(); renderControls() }
+
+/* ===== スロット本体（イベントを受けて動く） ===== */
+function doStart(rs){
+  if(mode!=="idle") return;
+  queue=rs.filter(i=>i>=0&&i<3);
+  if(!queue.length){ show(); return }
+  mode="spinning"; box.classList.add("waiting"); out.textContent="……";
+  queue.forEach(i=>{
+    reels[i].classList.add("spinning"); reels[i].classList.remove("landed");
+    clearInterval(timers[i]);
+    timers[i]=setInterval(()=>{ valsEl[i].textContent=pick(L(i)) }, 55+i*8);
+  });
+  renderControls();
+}
+function doStop(i,v){
+  if(mode!=="spinning"||!queue.includes(i)) return;
+  queue=queue.filter(x=>x!==i); pendingStop=false; clearTimeout(pendingTimer);
+  clearInterval(timers[i]); coasting++;
+  let d=70, n=matchMedia("(prefers-reduced-motion: reduce)").matches?3:0;
+  const coast=()=>{
+    n++;
+    if(n<4){ valsEl[i].textContent=pick(L(i)); d*=1.5; setTimeout(coast,d) }
+    else{
+      vals[i]=v; valsEl[i].textContent=v;
+      reels[i].classList.remove("spinning","next"); reels[i].classList.add("landed");
+      coasting--;
+      if(!queue.length&&!coasting){ mode="idle"; show() }
+      renderControls();
+    }
+  };
+  coast(); renderControls();
+}
+
+/* ===== 操作 → イベント送信 ===== */
+function send(ev){
+  if(online){ ev.from=myId; client.publish(T+"/ev",JSON.stringify(ev),{qos:1}) }
+  else handleEv(ev);
+}
+function handleEv(ev){
+  if(!ev||typeof ev!=="object") return;
+  if(ev.t==="start"&&Array.isArray(ev.r)) doStart(ev.r.map(Number));
+  if(ev.t==="stop"&&typeof ev.v==="string"&&ev.v.length<=24) doStop(Number(ev.r),ev.v);
+}
+function press(){
+  if(mode==="idle"){ send({t:"start",r:[0,1,2].filter(i=>!S.locks[i])}); return }
+  if(pendingStop||coasting||!queue.length) return;
+  const i=queue[0]; pendingStop=true;
+  pendingTimer=setTimeout(()=>{pendingStop=false},2500);
+  send({t:"stop",r:i,v:pick(L(i))});
+}
+btn.addEventListener("click",press);
+reels.forEach(r=>r.addEventListener("click",()=>{ if(mode==="spinning") press() }));
+
+function commit(){ S.ts=Date.now(); saveLocal(); publishState(); renderAll() }
+lockBtns.forEach((b,i)=>b.addEventListener("click",()=>{ if(mode!=="idle") return; S.locks[i]=!S.locks[i]; commit() }));
+
+/* 消す（今出ている言葉）＋元に戻す */
+let undoFn=null, toastT=null;
+function toast(msg,undo){
+  $("toastMsg").textContent=msg; undoFn=undo; $("toastUndo").hidden=!undo; $("toast").hidden=false;
+  clearTimeout(toastT); toastT=setTimeout(()=>{$("toast").hidden=true},4500);
+}
+$("toastUndo").addEventListener("click",()=>{ if(undoFn) undoFn(); $("toast").hidden=true });
+function removeWord(r,w){
+  if(L(r).length<=1){ toast(`「${NAMES[r]}」は最低1つ残してください`); return false }
+  if(S.custom[r].includes(w)) S.custom[r]=S.custom[r].filter(x=>x!==w);
+  else if(!S.removed[r].includes(w)) S.removed[r].push(w);
+  commit(); return true;
+}
+function restoreWord(r,w,wasCustom){
+  if(wasCustom){ if(!S.custom[r].includes(w)) S.custom[r].push(w) }
+  else S.removed[r]=S.removed[r].filter(x=>x!==w);
+  commit();
+}
+delBtns.forEach((b,r)=>b.addEventListener("click",()=>{
+  if(mode!=="idle") return;
+  const w=vals[r]; if(!L(r).includes(w)){ toast(`「${w}」はもう消えています`); return }
+  const wasCustom=S.custom[r].includes(w);
+  if(removeWord(r,w)) toast(`「${w}」を消しました`,()=>restoreWord(r,w,wasCustom));
+}));
+
+/* ===== 言葉の管理パネル ===== */
+let mr=1;
+document.querySelectorAll(".seg button").forEach(t=>t.addEventListener("click",()=>{
+  mr=+t.dataset.m; document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-selected",x===t)); renderWords();
+}));
+$("filter").addEventListener("input",renderWords);
+function renderWords(){
+  const f=$("filter").value.trim();
+  const live=L(mr).filter(w=>!f||w.includes(f)), gone=S.removed[mr].filter(w=>!f||w.includes(f));
+  $("liveHead").textContent=`使う言葉（${L(mr).length}）`;
+  $("goneHead").textContent=`消した言葉（${S.removed[mr].length}）タップで戻す`;
+  const lw=$("liveWords"); lw.innerHTML="";
+  live.forEach(w=>{
+    const s=document.createElement("span"); s.className="chip"+(S.custom[mr].includes(w)?" mine":""); s.append(w);
+    const x=document.createElement("button"); x.textContent="×"; x.setAttribute("aria-label",w+"を消す");
+    x.onclick=()=>{ const wc=S.custom[mr].includes(w), r=mr; if(removeWord(r,w)) toast(`「${w}」を消しました`,()=>restoreWord(r,w,wc)) };
+    s.append(x); lw.append(s);
+  });
+  if(!live.length) lw.innerHTML='<span class="empty">該当なし</span>';
+  const gw=$("goneWords"); gw.innerHTML="";
+  gone.forEach(w=>{ const b=document.createElement("button"); b.className="chip gone"; b.textContent=w; b.onclick=()=>restoreWord(mr,w,false); gw.append(b) });
+  if(!gone.length) gw.innerHTML='<span class="empty">なし</span>';
+  $("restoreAll").hidden=!S.removed[mr].length;
+}
+$("restoreAll").addEventListener("click",()=>{ const r=mr, old=[...S.removed[r]]; S.removed[r]=[]; commit(); toast(`${old.length}個を戻しました`,()=>{S.removed[r]=old;commit()}) });
+function addWord(){
+  const inp=$("newWord"), v=inp.value.trim().slice(0,20); inp.value="";
+  if(!v) return;
+  if(S.removed[mr].includes(v)){ S.removed[mr]=S.removed[mr].filter(x=>x!==v); commit(); return }
+  if(L(mr).includes(v)){ toast(`「${v}」はもう入っています`); return }
+  S.custom[mr].push(v); commit(); toast(`「${NAMES[mr]}」に「${v}」を足しました`);
+}
+$("addBtn").addEventListener("click",addWord);
+$("newWord").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.isComposing) addWord() });
+
+/* ===== 同期（公開MQTTブローカー経由） ===== */
+const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
+let client=null, online=false, T="", gotState=false, peers={}, presT=null, bi=0, tries=0;
+const pill=$("pill");
+function setStatus(kind,text){ pill.hidden=false; pill.className="pill "+kind; pill.textContent=text }
+function peerCount(){ const now=Date.now(); return Object.values(peers).filter(t=>now-t<40000).length }
+function refreshPill(){ if(online){ const n=peerCount(); setStatus("ok", n>=2?`${n}人で接続中`:"相手を待っています") } }
+function publishState(){ if(online) client.publish(T+"/state",JSON.stringify(S),{qos:1,retain:true}) }
+function presence(){ if(online){ client.publish(T+"/p",JSON.stringify({id:myId}),{qos:0}); refreshPill() } }
+
+function connect(){
+  if(!room) return;
+  T="shoumonai-roulette/v3/"+room;
+  if(!window.mqtt){ setStatus("err","同期できません"); return }
+  if(client){ try{client.end(true)}catch(e){} client=null }
+  online=false; gotState=false; setStatus("wait","接続中…");
+  const c=mqtt.connect(BROKERS[bi],{clientId:"shm_"+myId+"_"+tries,clean:true,connectTimeout:6000,reconnectPeriod:4000});
+  client=c; let everOk=false;
+  const fail=setTimeout(()=>{ if(!everOk&&c===client){ tries++; bi=(bi+1)%BROKERS.length; if(tries<4) connect(); else { try{c.end(true)}catch(e){} setStatus("err","つながりません") } } },8000);
+  c.on("connect",()=>{
+    if(c!==client) return;
+    everOk=true; clearTimeout(fail); online=true; peers[myId]=Date.now();
+    c.subscribe([T+"/ev",T+"/state",T+"/p"],{qos:1});
+    presence();
+    setTimeout(()=>{ if(c===client&&online&&!gotState) publishState() },1800);
+  });
+  c.on("message",(topic,payload)=>{
+    if(c!==client) return;
+    let m; try{ m=JSON.parse(payload.toString()) }catch(e){ return }
+    if(topic===T+"/ev") handleEv(m);
+    else if(topic===T+"/state"){ gotState=true; if(valid(m)&&m.ts>=S.ts){ S=m; saveLocal(); renderAll() } }
+    else if(topic===T+"/p"&&m&&typeof m.id==="string"){ const isNew=!peers[m.id]||Date.now()-peers[m.id]>40000; peers[m.id]=Date.now(); refreshPill(); if(isNew&&m.id!==myId) presence() }
+  });
+  c.on("close",()=>{ if(c===client&&online){ online=false; setStatus("wait","再接続中…") } });
+  clearInterval(presT); presT=setInterval(presence,15000);
+}
+
+/* 部屋UI */
+function roomUrl(){ const u=new URL(location.href); u.search=room?"?room="+room:""; u.hash=""; return u.toString() }
+function renderRoom(){
+  $("noRoom").hidden=!!room; $("inRoom").hidden=!room;
+  if(room){ $("roomLink").textContent=roomUrl(); $("roomBox").open=true } else pill.hidden=true;
+}
+$("makeRoom").addEventListener("click",()=>{
+  const a="abcdefghjkmnpqrstuvwxyz23456789"; let r=""; const buf=new Uint32Array(10); crypto.getRandomValues(buf); buf.forEach(n=>r+=a[n%a.length]);
+  const carry=JSON.parse(JSON.stringify(S));
+  room=r; history.replaceState(null,"",roomUrl()); S=carry; S.ts=Date.now(); saveLocal();
+  renderRoom(); renderAll(); tries=0; bi=0; connect();
+});
+$("leaveRoom").addEventListener("click",()=>{
+  if(client){ try{client.end(true)}catch(e){} } client=null; online=false; clearInterval(presT);
+  room=""; history.replaceState(null,"",roomUrl()); loadLocal(); renderRoom(); renderAll();
+});
+$("copyLink").addEventListener("click",async()=>{
+  const t=roomUrl();
+  try{ await navigator.clipboard.writeText(t); toast("リンクをコピーしました") }
+  catch(e){ const r=document.createRange(); r.selectNodeContents($("roomLink")); const s=getSelection(); s.removeAllRanges(); s.addRange(r); toast("リンクを選択しました。長押しでコピーしてください") }
+});
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&room&&!online){ tries=0; connect() } });
+
+renderRoom(); renderAll(); connect();
+</script>
+</body>
+</html>
